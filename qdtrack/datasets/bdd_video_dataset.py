@@ -9,5 +9,8 @@ class BDDVideoDataset(CocoVideoDataset):
     CLASSES = ('pedestrian', 'rider', 'car', 'bus', 'truck', 'bicycle',
                'motorcycle', 'train')
 
+
+    # CLASSES = ('pedestrian', 'rider', 'car', 'truck', 'bus', 'train', 
+    #            'motorcycle', 'bicycle')
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

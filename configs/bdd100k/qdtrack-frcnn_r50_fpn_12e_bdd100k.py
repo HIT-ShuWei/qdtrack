@@ -69,8 +69,8 @@ data = dict(
     train=[
         dict(
             type=dataset_type,
-            ann_file=data_root +
-            'labels/box_track_20/box_track_train_cocofmt.json',
+            # ann_file=data_root + 'labels/box_track_20/box_track_train_cocofmt.json',
+            ann_file=data_root + 'labels/box_track_20/box_track_train_remap_cocofmt.json',
             img_prefix=data_root + 'images/track/train/',
             key_img_sampler=dict(interval=1),
             ref_img_sampler=dict(num_ref_imgs=1, scope=3, method='uniform'),
@@ -84,12 +84,14 @@ data = dict(
     ],
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'labels/box_track_20/box_track_val_cocofmt.json',
+        # ann_file=data_root + 'labels/box_track_20/box_track_val_cocofmt.json',
+        ann_file=data_root + 'labels/box_track_20/box_track_val_remap_cocofmt.json',
         img_prefix=data_root + 'images/track/val/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'labels/box_track_20/box_track_val_cocofmt.json',
+        # ann_file=data_root + 'labels/box_track_20/box_track_val_cocofmt.json',
+        ann_file=data_root + 'labels/box_track_20/box_track_val_remap_cocofmt.json',
         img_prefix=data_root + 'images/track/val/',
         pipeline=test_pipeline))
 # optimizer

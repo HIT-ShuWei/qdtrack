@@ -27,7 +27,7 @@ MANIFEST
 
 result_vis/
 data/bdd/
-
+work_dirs/
 
 
 # PyInstaller
