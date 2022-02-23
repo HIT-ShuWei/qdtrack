@@ -43,9 +43,26 @@ class NewMatchEmbedTracker(QuasiDenseEmbedTracker):
         if bboxes.size(0) > 0 and not self.empty:
             (memo_bboxes, memo_labels, memo_embeds, memo_ids,
              memo_vs, memo_frames) = self.memo
+
+            # print('memo_bbox_before:{}'.format(memo_bboxes.size()))
+            if self.boundary_sift:
+                # if the tracklet vannished in the boundary,
+                # don't match such tracklet with the key obj not in boundary
+                valids_boundary = memo_bboxes.new_ones((memo_bboxes.size(0)))
+                left_thr = 20
+                right_thr = 1280 - 20
+                for i in range(1, memo_bboxes.size(0)):
+                    if (memo_bboxes[i,0] < left_thr or memo_bboxes[i,2] > right_thr) \
+                    and (frame_id - memo_frames[i]> 5):
+                        valids_boundary[i] = 0
+                valids_boundary = valids_boundary == 1
+                memo_bboxes = memo_bboxes[valids_boundary, :]
+                memo_labels = memo_labels[valids_boundary]
+                memo_embeds = memo_embeds[valids_boundary, :]
+            # print('memo_bbox_after:{}'.format(memo_bboxes.size()))
+
             scores, valid_part = self._get_dist(embeds, memo_embeds, metric=self.match_metric)
 
-            
             # if self.match_metric == 'bisoftmax':
             #     feats = torch.mm(embeds, memo_embeds.t())
             #     d2t_scores = feats.softmax(dim=1)
@@ -64,25 +81,6 @@ class NewMatchEmbedTracker(QuasiDenseEmbedTracker):
             if self.with_cats:
                 cat_same = labels.view(-1, 1) == memo_labels.view(1, -1)
                 scores *= cat_same.float().to(scores.device)
-            
-            # print('memo_bbox_before:{}'.format(memo_bboxes.size()))
-
-            if self.boundary_sift:
-                # if the tracklet vannished in the boundary,
-                # don't match such tracklet with the key obj not in boundary
-                valids_boundary = memo_bboxes.new_ones((memo_bboxes.size(0)))
-                left_thr = 20
-                right_thr = 1280 - 20
-                for i in range(1, memo_bboxes.size(0)):
-                    if (memo_bboxes[i,0] < left_thr or memo_bboxes[i,2] > right_thr) \
-                    and (frame_id - memo_frames[i]> 1):
-                        valids_boundary[i] = 0
-                valids_boundary = valids_boundary == 1
-                memo_bboxes = memo_bboxes[valids_boundary, :]
-                memo_labels = memo_labels[valids_boundary]
-                memo_embeds = memo_embeds[valids_boundary, :]
-
-            # print('memo_bbox_after:{}'.format(memo_bboxes.size()))
             
 
             for i in range(bboxes.size(0)):

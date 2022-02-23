@@ -57,6 +57,7 @@ class CocoVideoDataset(CocoDataset):
     def key_img_sampling(self, img_ids, interval=1):
         return img_ids[::interval]
 
+    # different from the origin version
     def ref_img_sampling(self,
                          img_info,
                          scope,
@@ -80,10 +81,11 @@ class CocoVideoDataset(CocoDataset):
             ref_img_info['filename'] = ref_img_info['file_name']
         return ref_img_info
 
+    # different
     def _pre_pipeline(self, _results):
         super().pre_pipeline(_results)
         _results['frame_id'] = _results['img_info'].get('frame_id', -1)
-
+    # different
     def pre_pipeline(self, results):
         """Prepare results dict for pipeline."""
         if isinstance(results, list):

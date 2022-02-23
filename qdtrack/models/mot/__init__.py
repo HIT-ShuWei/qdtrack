@@ -1,3 +1,3 @@
 from .qdtrack import QDTrack
-
-__all__ = ['QDTrack']
+from .vpmtrack import VPMTrack
+__all__ = ['QDTrack', 'VPMTrack']

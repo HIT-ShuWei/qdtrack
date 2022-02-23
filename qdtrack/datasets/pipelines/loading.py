@@ -12,6 +12,9 @@ class LoadMultiImagesFromFile(LoadImageFromFile):
         outs = []
         for _results in results:
             _results = super().__call__(_results)
+            # print('img.shape={}'.format(_results['img'].shape))
+            # print('img.type={}'.format(type(_results['img'])))
+
             outs.append(_results)
         return outs
 
@@ -19,10 +22,11 @@ class LoadMultiImagesFromFile(LoadImageFromFile):
 @PIPELINES.register_module()
 class SeqLoadAnnotations(LoadAnnotations):
 
-    def __init__(self, with_ins_id=False, *args, **kwargs):
+    def __init__(self, with_loc_map=False ,with_ins_id=False, *args, **kwargs):
         # TODO: name
         super().__init__(*args, **kwargs)
         self.with_ins_id = with_ins_id
+        self.with_loc_map = with_loc_map
 
     def _load_ins_ids(self, results):
         """Private function to load label annotations.
@@ -39,11 +43,20 @@ class SeqLoadAnnotations(LoadAnnotations):
 
         return results
 
+    def _load_loc_map(self, results):
+
+        results['location_maps'] = results['ann_info']['location_map'].copy()
+
+        return results
+
     def __call__(self, results):
         outs = []
         for _results in results:
             _results = super().__call__(_results)
+            if self.with_loc_map:
+                _results = self._load_loc_map(_results)
             if self.with_ins_id:
                 _results = self._load_ins_ids(_results)
             outs.append(_results)
+
         return outs

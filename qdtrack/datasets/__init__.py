@@ -10,10 +10,12 @@ from .pipelines import (LoadMultiImagesFromFile, SeqCollect,
 from .tao_dataset import TaoDataset
 from .mot17_dataset import MOT17Dataset
 
+from .bdd_self_supervision_dataset import BDDSelfSupervisionDataset
+
 __all__ = [
     'DATASETS', 'PIPELINES', 'build_dataloader', 'build_dataset', 'CocoVID',
     'BDDVideoDataset', 'CocoVideoDataset', 'LoadMultiImagesFromFile',
     'SeqLoadAnnotations', 'SeqResize', 'SeqNormalize', 'SeqRandomFlip',
     'SeqPad', 'SeqDefaultFormatBundle', 'SeqCollect', 'TaoDataset',
-    'MOT17Dataset'
+    'MOT17Dataset', 'BDDSelfSupervisionDataset'
 ]
