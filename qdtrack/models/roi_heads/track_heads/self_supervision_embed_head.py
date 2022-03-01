@@ -123,6 +123,10 @@ class SelfSupervisionEmbedHead(nn.Module):
         embeds = torch.cat(embeds, dim=1)
         scores = torch.cat(scores, dim=1)
 
+        # print("location_maps:{}".format(location_maps.size()))
+        # print("embeds:{}".format(embeds.size()))
+        # print('scores:{}'.format(scores.size()))
+
         return location_maps, embeds, scores
 
     def get_track_targets(self, gt_match_indices, key_sampling_results,

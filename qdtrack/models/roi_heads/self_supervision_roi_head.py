@@ -111,9 +111,10 @@ class SelfSupervisionRoIHead(StandardRoIHead):
                 ref_sampling_results.append(ref_sampling_result)
 
             key_bboxes = [res.pos_bboxes for res in key_sampling_results]
-            key_feats = self._track_forward(x, key_bboxes)
+            key_location_maps, key_feats, key_scores = self._track_forward(x, key_bboxes)
             ref_bboxes = [res.bboxes for res in ref_sampling_results]
-            ref_feats = self._track_forward(ref_x, ref_bboxes)
+            ref_location_maps, ref_feats, ref_scores = self._track_forward(ref_x, ref_bboxes)
+            print('key_location_maps:{}'.format(key_location_maps.size()))
 
             match_feats = self.track_head.match(key_feats, ref_feats,
                                                 key_sampling_results,
@@ -129,10 +130,12 @@ class SelfSupervisionRoIHead(StandardRoIHead):
     def _track_forward(self, x, bboxes):
         """Track head forward function used in both training and testing."""
         rois = bbox2roi(bboxes)
+        print('bboxes:{}'.format(bboxes[1].size()))
+        print('rois:{}'.format(rois.size()))
         track_feats = self.track_roi_extractor(
             x[:self.track_roi_extractor.num_inputs], rois)
-        track_feats = self.track_head(track_feats)
-        return track_feats
+        location_maps, track_feats, scores = self.track_head(track_feats)
+        return location_maps, track_feats, scores
 
     def simple_test(self, x, img_metas, proposal_list, rescale):
         det_bboxes, det_labels = self.simple_test_bboxes(
