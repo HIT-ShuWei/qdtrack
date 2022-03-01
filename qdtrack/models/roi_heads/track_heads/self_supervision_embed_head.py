@@ -12,10 +12,11 @@ class SelfSupervisionEmbedHead(nn.Module):
 
     def __init__(self,
                  num_convs=4,
+                 num_fcs=0,
+                 num_regions=4,
                  roi_feat_size=7,
                  in_channels=256,
                  conv_out_channels=256,
-                 fc_out_channels=1024,
                  embed_channels=256,
                  conv_cfg=None,
                  norm_cfg=None,
@@ -30,18 +31,23 @@ class SelfSupervisionEmbedHead(nn.Module):
                      hard_mining=True)):
         super(SelfSupervisionEmbedHead, self).__init__()
         self.num_convs = num_convs
+        self.num_regions = num_regions
         self.roi_feat_size = roi_feat_size
         self.in_channels = in_channels
         self.conv_out_channels = conv_out_channels
-        self.fc_out_channels = fc_out_channels
         self.embed_channels = embed_channels
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.relu = nn.ReLU(inplace=True)
         self.convs, last_layer_dim = self._add_conv_branch(
             self.num_convs, self.in_channels)
+        self.classifer, last_layer_dim = self._add_classifier_branch(
+            last_layer_dim, self.num_regions
+        )
+        self.softmax = nn.Softmax(dim=1)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc_embed = nn.Linear(last_layer_dim, embed_channels)
-
+        
         self.softmax_temp = softmax_temp
         self.loss_track = build_loss(loss_track)
         if loss_track_aux is not None:
@@ -66,27 +72,58 @@ class SelfSupervisionEmbedHead(nn.Module):
                         conv_cfg=self.conv_cfg,
                         norm_cfg=self.norm_cfg))
             last_layer_dim = self.conv_out_channels
-        
+
         return convs, last_layer_dim
+        
+        
+    def _add_classifier_branch(self, in_channels, out_channels):
+
+        classifier = nn.ModuleList()
+        classifier.append(
+            ConvModule(
+                in_channels,
+                out_channels,
+                1,
+                padding=0,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=None,
+                act_cfg=None))
+        last_layer_dim = out_channels
+        return classifier, last_layer_dim
+
+        
 
     def init_weights(self):
-        for m in self.fcs:
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                nn.init.constant_(m.bias, 0)
         nn.init.normal_(self.fc_embed.weight, 0, 0.01)
         nn.init.constant_(self.fc_embed.bias, 0)
 
     def forward(self, x):
+
+        # 3*3 conv layers
         if self.num_convs > 0:
             for i, conv in enumerate(self.convs):
                 x = conv(x)
-        x = x.view(x.size(0), -1)
-        if self.num_fcs > 0:
-            for i, fc in enumerate(self.fcs):
-                x = self.relu(fc(x))
-        x = self.fc_embed(x)
-        return x
+
+        # 1*1 conv layer + softmax
+        location_maps = self.classifer[0](x)
+        location_maps = self.softmax(location_maps)
+
+        # get embedding and visible-scores
+        embeds = []
+        scores = []
+        for i in range(self.num_regions):
+            location_map = location_maps[:,i,:,:].unsqueeze(1)
+            emb = torch.mul(location_map, x)
+            emb = self.avgpool(emb)
+            embeds.append(emb.squeeze().unsqueeze(1))
+            
+            score = torch.sum(location_map, (2,3))
+            scores.append(score.unsqueeze(1))
+
+        embeds = torch.cat(embeds, dim=1)
+        scores = torch.cat(scores, dim=1)
+
+        return location_maps, embeds, scores
 
     def get_track_targets(self, gt_match_indices, key_sampling_results,
                           ref_sampling_results):

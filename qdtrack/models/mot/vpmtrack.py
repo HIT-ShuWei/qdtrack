@@ -42,7 +42,6 @@ class VPMTrack(QDTrack):
             proposal_cfg=proposal_cfg)
         losses.update(rpn_losses)
 
-        # print('proposal list:{}'.format(proposal_list))
 
         ref_x = self.extract_feat(ref_img)
         ref_proposals = self.rpn_head.simple_test_rpn(ref_x, ref_img_metas)
