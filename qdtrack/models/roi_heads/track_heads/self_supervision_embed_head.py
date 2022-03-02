@@ -123,6 +123,7 @@ class SelfSupervisionEmbedHead(nn.Module):
         embeds = torch.cat(embeds, dim=1)
         scores = torch.cat(scores, dim=1)
 
+        embeds = embeds.view(embeds.size(0), -1)
         # print("location_maps:{}".format(location_maps.size()))
         # print("embeds:{}".format(embeds.size()))
         # print('scores:{}'.format(scores.size()))
@@ -188,6 +189,34 @@ class SelfSupervisionEmbedHead(nn.Module):
             losses['loss_track_aux'] = loss_track_aux / len(dists)
 
         return losses
+
+    def get_loc_maps(self, gt_bboxes, key_sampling_results):
+        """
+        generate the self-supervision label for location layer
+        Args:
+            gt_bboxes(list(Tensor)) : ground_truth bounding box 
+            key_sampling_results(list(SamplingResult)) : Sampling result after proposal and assign
+
+        Returns:
+            gt_location_maps(Tensor) : [batch_inds, num_regiouns, roi_feat_size, roi_feat_size] 
+        """
+        key_bboxes = [res.pos_bboxes for res in key_sampling_results]
+        key_is_gts = [res.pos_is_gt for res in key_sampling_results]
+        key_gt_inds = [res.pos_assigned_gt_inds for res in key_sampling_results]
+
+        print("gt_bboxes",gt_bboxes[0].size())
+        print("key_bboxes",key_bboxes[0].size())
+        print("is_gts",key_is_gts[0])
+        print("gt_inds", key_gt_inds[0])
+        
+        for _gt_bbox, _key_bbox, _key_is_gt, _key_gt_inds in zip(
+            gt_bboxes, key_bboxes, key_is_gts, key_gt_inds):
+            
+            pass
+
+        return 
+
+
 
     @staticmethod
     def random_choice(gallery, num):

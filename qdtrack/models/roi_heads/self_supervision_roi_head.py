@@ -114,24 +114,32 @@ class SelfSupervisionRoIHead(StandardRoIHead):
             key_location_maps, key_feats, key_scores = self._track_forward(x, key_bboxes)
             ref_bboxes = [res.bboxes for res in ref_sampling_results]
             ref_location_maps, ref_feats, ref_scores = self._track_forward(ref_x, ref_bboxes)
-            print('key_location_maps:{}'.format(key_location_maps.size()))
 
+            # track loss
             match_feats = self.track_head.match(key_feats, ref_feats,
                                                 key_sampling_results,
                                                 ref_sampling_results)
             asso_targets = self.track_head.get_track_targets(
                 gt_match_indices, key_sampling_results, ref_sampling_results)
+
             loss_track = self.track_head.loss(*match_feats, *asso_targets)
 
+
             losses.update(loss_track)
+
+            # location map loss
+            #TODO finnish it 
+            gt_location_maps = self.track_head.get_loc_maps(gt_bboxes, key_sampling_results)
+
+            # loss_loc_map = self.track_head.loss_loc(key_location_maps, gt_location_maps)
+
+            # losses.update(loss_loc_map)
 
         return losses
 
     def _track_forward(self, x, bboxes):
         """Track head forward function used in both training and testing."""
         rois = bbox2roi(bboxes)
-        print('bboxes:{}'.format(bboxes[1].size()))
-        print('rois:{}'.format(rois.size()))
         track_feats = self.track_roi_extractor(
             x[:self.track_roi_extractor.num_inputs], rois)
         location_maps, track_feats, scores = self.track_head(track_feats)
