@@ -6,6 +6,8 @@ from mmdet.models import HEADS, build_loss
 
 from qdtrack.core import cal_similarity
 
+import math 
+
 
 @HEADS.register_module()
 class SelfSupervisionEmbedHead(nn.Module):
@@ -204,18 +206,76 @@ class SelfSupervisionEmbedHead(nn.Module):
         key_is_gts = [res.pos_is_gt for res in key_sampling_results]
         key_gt_inds = [res.pos_assigned_gt_inds for res in key_sampling_results]
 
-        print("gt_bboxes",gt_bboxes[0].size())
-        print("key_bboxes",key_bboxes[0].size())
-        print("is_gts",key_is_gts[0])
-        print("gt_inds", key_gt_inds[0])
         
-        for _gt_bbox, _key_bbox, _key_is_gt, _key_gt_inds in zip(
+        gt_location_maps = []
+
+        for _gt_bbox, _key_bbox, _key_is_gt, _key_gt_ind in zip(
             gt_bboxes, key_bboxes, key_is_gts, key_gt_inds):
+            
+
+            print('if has not gt:',_gt_bbox.size(0) - _key_bbox.size(0) )
+            loc_map = self.generate(_gt_bbox, _key_bbox, _key_is_gt, _key_gt_ind)
+            # TODO these above have been finished
+
+            # print("key_bbox", _key_bbox.size())
+            # torch.set_printoptions(profile = 'full')
+            # print("loc_map",loc_map.size())
             
             pass
 
         return 
 
+    def generate(self, gt_bboxes, key_bboxes, key_is_gt, key_gt_ind):
+        """
+        Get the self-supervision label
+
+        """
+        bs = key_bboxes.size(0)
+        loc_map = torch.zeros((bs, self.num_regions, self.roi_feat_size, self.roi_feat_size)).to(key_bboxes.device)
+
+        for ind in range(key_bboxes.size(0)):
+            if key_is_gt[ind]:
+                # if the box is gt, the map label just devide it into num_regions 
+                for ind_region in range(self.num_regions):
+                    begin = ind_region * math.floor(self.roi_feat_size / self.num_regions)
+                    end = (ind_region+1) * math.floor(self.roi_feat_size / self.num_regions)
+                    loc_map[ind, ind_region, :, begin:end] = 1
+            else:
+                # the box is a proposal, cal the overlap on gt
+                gt_ind = key_gt_ind[ind]
+                gt_bbox = gt_bboxes[gt_ind].clone()
+                key_bbox = key_bboxes[ind].clone()
+                unit_w = (gt_bbox[2] - gt_bbox[0]) / self.num_regions
+                x1, y1, x2, y2 = gt_bbox[:4].clone().detach()
+                x1_k, y1_k, x2_k, y2_k = key_bbox[:4].clone().detach()
+                w_k, h_k = x2_k-x1_k, y2_k-y1_k
+                w_ratio, h_ratio = w_k / self.roi_feat_size, h_k / self.roi_feat_size
+
+                for ind_region in range(self.num_regions):
+                    if (x1_k < x1 + ind_region*unit_w and x2_k < x1 + ind_region*unit_w) or \
+                    (x1_k > x1 + (ind_region+1)*unit_w and x2_k > x1 + (ind_region+1)*unit_w): 
+                        # key_bbox doesn't has the ind_region
+                        # loc_map[ind, ind_region, :, :] = 0
+                        continue
+
+                    else:
+                        # key_bbox has this region overlap with gt_bbox
+                        r_x1 = max(x1_k, x1 + ind_region*unit_w)
+                        r_x2 = min(x2_k, x1 + (ind_region+1)*unit_w)
+                        r_y1 = max(y1_k, y1)
+                        r_y2 = min(y2_k, y2)
+                        # down sampling
+                        r_x1_ds = math.floor((r_x1-x1_k) / w_ratio)
+                        r_x2_ds = math.floor((r_x2-x1_k) / w_ratio)
+                        r_y1_ds = math.floor((r_y1-y1_k) / h_ratio)
+                        r_y2_ds = math.floor((r_y2-y1_k) / h_ratio)
+                        # self-supervision labeling
+                        
+                        loc_map[ind, ind_region, r_y1_ds:r_y2_ds, r_x1_ds:r_x2_ds] = 1
+                        torch.set_printoptions(profile = 'full')
+                        print(loc_map[ind, ind_region, :, :])
+
+        return loc_map
 
 
     @staticmethod
