@@ -118,7 +118,8 @@ class SelfSupervisionRoIHead(StandardRoIHead):
             # track loss
             match_feats = self.track_head.match(key_feats, ref_feats,
                                                 key_sampling_results,
-                                                ref_sampling_results)
+                                                ref_sampling_results,
+                                                key_scores, ref_scores)
             asso_targets = self.track_head.get_track_targets(
                 gt_match_indices, key_sampling_results, ref_sampling_results)
 
@@ -126,14 +127,16 @@ class SelfSupervisionRoIHead(StandardRoIHead):
 
 
             losses.update(loss_track)
-
+            
+            print('key_bboxes:{}'.format(key_bboxes.device))
             # location map loss
-            #TODO finnish it 
             gt_location_maps = self.track_head.get_loc_maps(gt_bboxes, key_sampling_results)
+            # print("gt_loc:".format(gt_location_maps.device))
+            #TODO check gt_loc_map to device(cuda)
+            loss_loc_map = self.track_head.loss_location(key_location_maps, gt_location_maps,
+                                                    key_sampling_results)
 
-            # loss_loc_map = self.track_head.loss_loc(key_location_maps, gt_location_maps)
-
-            # losses.update(loss_loc_map)
+            losses.update(loss_loc_map)
 
         return losses
 

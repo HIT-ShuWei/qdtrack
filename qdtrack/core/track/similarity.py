@@ -23,3 +23,38 @@ def cal_similarity(key_embeds,
             return dists
         else:
             return torch.mm(key_embeds, ref_embeds.t())
+
+def cal_weighted_similarity(key_embeds,
+                            ref_embeds,
+                            key_scores,
+                            ref_scores,
+                            method='dot_product',
+                            temperature=-1):
+    assert method in ['dot_product', 'cosine']
+    num_regions = key_embeds.size(1)
+
+    if key_embeds.size(0) == 0 or ref_embeds.size(0) == 0:
+        return torch.zeros((key_embeds.size(0), ref_embeds.size(0)),
+                           device=key_embeds.device)
+
+    if method == 'cosine':
+        key_embeds = F.normalize(key_embeds, p=2, dim=2)
+        ref_embeds = F.normalize(ref_embeds, p=2, dim=2)
+        dists = []
+        for region_ind in range(num_regions):
+            dist = torch.mm(key_embeds[:,region_ind,:], ref_embeds[:,region_ind,:].t())
+            dists.append(dist)
+        dists = torch.cat(dists).view(num_regions, key_embeds.size(0), ref_embeds.size(0))
+        return torch.sum(dists, dim=0)
+    elif method == 'dot_product':
+        if temperature > 0:
+            dists = cal_similarity(key_embeds, ref_embeds, method='cosine')
+            dists /= temperature
+            return dists
+        else:
+            dists = []
+            for region_ind in range(num_regions):
+                dist = torch.mm(key_embeds[:,region_ind,:], ref_embeds[:,region_ind,:].t())
+                dists.append(dist)
+            dists = torch.cat(dists).view(num_regions, key_embeds.size(0), ref_embeds.size(0))
+            return torch.sum(dists, dim=0)

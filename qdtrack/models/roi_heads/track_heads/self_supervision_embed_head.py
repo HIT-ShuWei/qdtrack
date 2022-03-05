@@ -4,7 +4,7 @@ import torch.nn as nn
 from mmcv.cnn import ConvModule
 from mmdet.models import HEADS, build_loss
 
-from qdtrack.core import cal_similarity
+from qdtrack.core import cal_similarity, cal_weighted_similarity
 
 import math 
 
@@ -23,6 +23,7 @@ class SelfSupervisionEmbedHead(nn.Module):
                  conv_cfg=None,
                  norm_cfg=None,
                  softmax_temp=-1,
+                 loss_loc=dict(type='CrossEntropyLoss', use_mask=True),
                  loss_track=dict(
                      type='MultiPosCrossEntropyLoss', loss_weight=0.25),
                  loss_track_aux=dict(
@@ -51,6 +52,8 @@ class SelfSupervisionEmbedHead(nn.Module):
         self.fc_embed = nn.Linear(last_layer_dim, embed_channels)
         
         self.softmax_temp = softmax_temp
+        self.loss_loc = build_loss(loss_loc)
+
         self.loss_track = build_loss(loss_track)
         if loss_track_aux is not None:
             self.loss_track_aux = build_loss(loss_track_aux)
@@ -125,11 +128,8 @@ class SelfSupervisionEmbedHead(nn.Module):
         embeds = torch.cat(embeds, dim=1)
         scores = torch.cat(scores, dim=1)
 
-        embeds = embeds.view(embeds.size(0), -1)
-        # print("location_maps:{}".format(location_maps.size()))
-        # print("embeds:{}".format(embeds.size()))
-        # print('scores:{}'.format(scores.size()))
-
+        # embeds = embeds.view(embeds.size(0), -1)
+        
         return location_maps, embeds, scores
 
     def get_track_targets(self, gt_match_indices, key_sampling_results,
@@ -152,23 +152,28 @@ class SelfSupervisionEmbedHead(nn.Module):
         return track_targets, track_weights
 
     def match(self, key_embeds, ref_embeds, key_sampling_results,
-              ref_sampling_results):
+              ref_sampling_results, key_scores, ref_scores):
         num_key_rois = [res.pos_bboxes.size(0) for res in key_sampling_results]
         key_embeds = torch.split(key_embeds, num_key_rois)
+        key_scores = torch.split(key_scores, num_key_rois)
         num_ref_rois = [res.bboxes.size(0) for res in ref_sampling_results]
         ref_embeds = torch.split(ref_embeds, num_ref_rois)
+        ref_scores = torch.split(ref_scores, num_ref_rois)
 
         dists, cos_dists = [], []
-        for key_embed, ref_embed in zip(key_embeds, ref_embeds):
-            dist = cal_similarity(
+        for key_embed, ref_embed, key_score, ref_score in \
+        zip(key_embeds, ref_embeds, key_scores, ref_scores):
+            dist = cal_weighted_similarity(
                 key_embed,
                 ref_embed,
+                key_score,
+                ref_score,
                 method='dot_product',
                 temperature=self.softmax_temp)
             dists.append(dist)
             if self.loss_track_aux is not None:
-                cos_dist = cal_similarity(
-                    key_embed, ref_embed, method='cosine')
+                cos_dist = cal_weighted_similarity(
+                    key_embed, ref_embed, key_score, ref_score, method='cosine')
                 cos_dists.append(cos_dist)
             else:
                 cos_dists.append(None)
@@ -192,6 +197,33 @@ class SelfSupervisionEmbedHead(nn.Module):
 
         return losses
 
+    def loss_location(self, key_location_maps, gt_location_maps, key_sampling_results):
+        """
+        loss of location map----> CE Loss
+        
+        Args:
+        key_location_maps (Tensor): [batch_inds, region_inds, h, w]
+        gt_location_maps (Tensor): [batch_inds, region_inds, h, w]
+        
+        Return:
+
+        loss: CE loss
+        """
+        losses = dict()
+
+        loss_loc = 0.
+
+        num_key_rois = [res.pos_bboxes.size(0) for res in key_sampling_results]
+        key_location_maps = torch.split(key_location_maps, num_key_rois)
+        gt_location_maps = torch.split(gt_location_maps, num_key_rois)
+
+        for _key_loc, _gt_loc in zip(key_location_maps, gt_location_maps):
+            loss_loc += self.loss_loc(_key_loc, _gt_loc)
+        
+        losses['loss_loc'] = loss_loc / len(key_location_maps)
+
+        return losses
+
     def get_loc_maps(self, gt_bboxes, key_sampling_results):
         """
         generate the self-supervision label for location layer
@@ -212,18 +244,13 @@ class SelfSupervisionEmbedHead(nn.Module):
         for _gt_bbox, _key_bbox, _key_is_gt, _key_gt_ind in zip(
             gt_bboxes, key_bboxes, key_is_gts, key_gt_inds):
             
-
-            print('if has not gt:',_gt_bbox.size(0) - _key_bbox.size(0) )
             loc_map = self.generate(_gt_bbox, _key_bbox, _key_is_gt, _key_gt_ind)
-            # TODO these above have been finished
-
-            # print("key_bbox", _key_bbox.size())
-            # torch.set_printoptions(profile = 'full')
-            # print("loc_map",loc_map.size())
             
-            pass
+            gt_location_maps.append(loc_map)            
 
-        return 
+        gt_location_maps = torch.cat(gt_location_maps, dim=0)
+        
+        return gt_location_maps
 
     def generate(self, gt_bboxes, key_bboxes, key_is_gt, key_gt_ind):
         """
@@ -272,10 +299,13 @@ class SelfSupervisionEmbedHead(nn.Module):
                         # self-supervision labeling
                         
                         loc_map[ind, ind_region, r_y1_ds:r_y2_ds, r_x1_ds:r_x2_ds] = 1
-                        torch.set_printoptions(profile = 'full')
-                        print(loc_map[ind, ind_region, :, :])
+                        # torch.set_printoptions(profile = 'full')
+                        # print(loc_map[ind, ind_region, :, :])
 
         return loc_map
+
+    
+
 
 
     @staticmethod
