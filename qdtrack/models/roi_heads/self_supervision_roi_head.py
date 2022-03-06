@@ -127,12 +127,10 @@ class SelfSupervisionRoIHead(StandardRoIHead):
 
 
             losses.update(loss_track)
-            
-            print('key_bboxes:{}'.format(key_bboxes.device))
+
             # location map loss
             gt_location_maps = self.track_head.get_loc_maps(gt_bboxes, key_sampling_results)
-            # print("gt_loc:".format(gt_location_maps.device))
-            #TODO check gt_loc_map to device(cuda)
+
             loss_loc_map = self.track_head.loss_location(key_location_maps, gt_location_maps,
                                                     key_sampling_results)
 
@@ -161,6 +159,6 @@ class SelfSupervisionRoIHead(StandardRoIHead):
 
         track_bboxes = det_bboxes[:, :-1] * torch.tensor(
             img_metas[0]['scale_factor']).to(det_bboxes.device)
-        track_feats = self._track_forward(x, [track_bboxes])
+        _, track_feats, scores = self._track_forward(x, [track_bboxes])
 
-        return det_bboxes, det_labels, track_feats
+        return det_bboxes, det_labels, track_feats, scores

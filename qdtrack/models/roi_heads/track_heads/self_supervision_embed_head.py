@@ -304,9 +304,6 @@ class SelfSupervisionEmbedHead(nn.Module):
 
         return loc_map
 
-    
-
-
 
     @staticmethod
     def random_choice(gallery, num):

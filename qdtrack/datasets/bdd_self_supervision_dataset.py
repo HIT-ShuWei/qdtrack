@@ -37,7 +37,7 @@ class BDDSelfSupervisionDataset(CocoVideoDataset):
         gt_bboxes_ignore = []
         gt_masks_ann = []
         gt_instance_ids = []
-        gt_location_maps = []
+        # gt_location_maps = []
 
         for i, ann in enumerate(ann_info):
             if ann.get('ignore', False):
@@ -93,21 +93,21 @@ class BDDSelfSupervisionDataset(CocoVideoDataset):
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        if self.only_holistic:
-            location_map = np.zeros((img_info['height'], img_info['width']), dtype=np.int64)
-            location_label = 0
-            meta_h = img_info['height'] // self.devide_h
-            meta_w = img_info['width'] // self.devide_w
-            for i in range(self.devide_w):
-                for j in range(self.devide_h):
-                    location_label += 1
-                    if i == self.devide_w -1 and img_info['width'] % self.devide_w != 0:
-                        location_map[j*meta_h:(j+1)*meta_h, i*meta_w:img_info['width']] = location_label
-                        continue
-                    if j == self.devide_h -1 and img_info['height'] % self.devide_h != 0:
-                        location_map[j*meta_h:img_info['height'], i*meta_w:(i+1)*meta_w] = location_label
-                        continue
-                    location_map[j*meta_h:(j+1)*meta_h, i*meta_w:(i+1)*meta_w] = location_label
+        # if self.only_holistic:
+        #     location_map = np.zeros((img_info['height'], img_info['width']), dtype=np.int64)
+        #     location_label = 0
+        #     meta_h = img_info['height'] // self.devide_h
+        #     meta_w = img_info['width'] // self.devide_w
+        #     for i in range(self.devide_w):
+        #         for j in range(self.devide_h):
+        #             location_label += 1
+        #             if i == self.devide_w -1 and img_info['width'] % self.devide_w != 0:
+        #                 location_map[j*meta_h:(j+1)*meta_h, i*meta_w:img_info['width']] = location_label
+        #                 continue
+        #             if j == self.devide_h -1 and img_info['height'] % self.devide_h != 0:
+        #                 location_map[j*meta_h:img_info['height'], i*meta_w:(i+1)*meta_w] = location_label
+        #                 continue
+        #             location_map[j*meta_h:(j+1)*meta_h, i*meta_w:(i+1)*meta_w] = location_label
 
         seg_map = img_info['filename'].replace('jpg', 'png')
         
@@ -116,8 +116,7 @@ class BDDSelfSupervisionDataset(CocoVideoDataset):
             labels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
-            seg_map=seg_map,
-            location_map=location_map)
+            seg_map=seg_map)
 
         if self.load_as_video:
             ann['instance_ids'] = np.array(gt_instance_ids).astype(np.int)
