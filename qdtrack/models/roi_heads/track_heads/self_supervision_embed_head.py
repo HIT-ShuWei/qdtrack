@@ -24,6 +24,7 @@ class SelfSupervisionEmbedHead(nn.Module):
                  norm_cfg=None,
                  softmax_temp=-1,
                  loss_loc=dict(type='CrossEntropyLoss', use_mask=True),
+                 loss_loc_ref = dict(type='CrossEntropyLoss', use_mask=True,loss_weight=0.001),
                  loss_track=dict(
                      type='MultiPosCrossEntropyLoss', loss_weight=0.25),
                  loss_track_aux=dict(
@@ -53,6 +54,7 @@ class SelfSupervisionEmbedHead(nn.Module):
         
         self.softmax_temp = softmax_temp
         self.loss_loc = build_loss(loss_loc)
+        self.loss_loc_ref = build_loss(loss_loc_ref)
 
         self.loss_track = build_loss(loss_track)
         if loss_track_aux is not None:
@@ -224,6 +226,34 @@ class SelfSupervisionEmbedHead(nn.Module):
 
         return losses
 
+    def loss_location_ref(self, ref_location_maps, gt_location_maps, ref_sampling_results):
+        """
+        loss of location map----> CE Loss
+        
+        Args:
+        key_location_maps (Tensor): [batch_inds, region_inds, h, w]
+        gt_location_maps (Tensor): [batch_inds, region_inds, h, w]
+        
+        Return:
+
+        loss: CE loss
+        """
+        losses = dict()
+
+        loss_loc = 0.
+
+        num_ref_rois = [res.bboxes.size(0) for res in ref_sampling_results]
+        ref_location_maps = torch.split(ref_location_maps, num_ref_rois)
+        gt_location_maps = torch.split(gt_location_maps, num_ref_rois)
+
+        for _ref_loc, _gt_loc in zip(ref_location_maps, gt_location_maps):
+            loss_loc += self.loss_loc_ref(_ref_loc, _gt_loc)
+        
+        losses['loss_loc_ref'] = loss_loc / len(ref_location_maps)
+
+        return losses
+
+
     def get_loc_maps(self, gt_bboxes, key_sampling_results):
         """
         generate the self-supervision label for location layer
@@ -251,6 +281,7 @@ class SelfSupervisionEmbedHead(nn.Module):
         gt_location_maps = torch.cat(gt_location_maps, dim=0)
         
         return gt_location_maps
+
 
     def generate(self, gt_bboxes, key_bboxes, key_is_gt, key_gt_ind):
         """

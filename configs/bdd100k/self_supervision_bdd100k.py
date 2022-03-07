@@ -11,6 +11,8 @@ model = dict(
             type='SelfSupervisionEmbedHead',
             roi_feat_size=27,
             num_regions = 3,
+            loss_loc=dict(type='CrossEntropyLoss', use_mask=True),
+            loss_loc_ref = dict(type='CrossEntropyLoss', use_mask=True,loss_weight=0),
         ),
     ),
 )
@@ -109,4 +111,5 @@ log_level = 'INFO'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-evaluation = dict(metric=['bbox', 'track'], interval=1)
+evaluation = dict(metric=['bbox', 'track'], interval=6)
+find_unused_parameters = True

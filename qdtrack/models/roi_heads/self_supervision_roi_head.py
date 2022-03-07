@@ -133,8 +133,15 @@ class SelfSupervisionRoIHead(StandardRoIHead):
 
             loss_loc_map = self.track_head.loss_location(key_location_maps, gt_location_maps,
                                                     key_sampling_results)
-
             losses.update(loss_loc_map)
+            
+            # gt_location_maps_ref = self.track_head.get_loc_maps(gt_bboxes, ref_sampling_results)
+            gt_location_maps_ref = torch.zeros_like(ref_location_maps).to(ref_location_maps.device)
+            
+            loss_loc_map_ref = self.track_head.loss_location_ref(ref_location_maps, gt_location_maps_ref,
+                                                    ref_sampling_results)
+            losses.update(loss_loc_map_ref)
+
 
         return losses
 
