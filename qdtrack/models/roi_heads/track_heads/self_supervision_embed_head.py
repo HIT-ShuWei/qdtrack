@@ -105,7 +105,8 @@ class SelfSupervisionEmbedHead(nn.Module):
         nn.init.constant_(self.fc_embed.bias, 0)
 
     def forward(self, x):
-
+        
+        print('net x:{}'.format(x.size()))
         # 3*3 conv layers
         if self.num_convs > 0:
             for i, conv in enumerate(self.convs):
@@ -122,7 +123,8 @@ class SelfSupervisionEmbedHead(nn.Module):
             location_map = location_maps[:,i,:,:].unsqueeze(1)
             emb = torch.mul(location_map, x)
             emb = self.avgpool(emb)
-            embeds.append(emb.squeeze().unsqueeze(1))
+
+            embeds.append(emb.squeeze(2).squeeze(2).unsqueeze(1))
             
             score = torch.sum(location_map, (2,3))
             scores.append(score.unsqueeze(1))
@@ -131,7 +133,6 @@ class SelfSupervisionEmbedHead(nn.Module):
         scores = torch.cat(scores, dim=1)
 
         # embeds = embeds.view(embeds.size(0), -1)
-        
         return location_maps, embeds, scores
 
     def get_track_targets(self, gt_match_indices, key_sampling_results,

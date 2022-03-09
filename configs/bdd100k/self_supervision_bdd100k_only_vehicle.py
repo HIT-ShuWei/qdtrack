@@ -13,15 +13,14 @@ model = dict(
             num_regions = 3,
             loss_loc=dict(type='CrossEntropyLoss', use_mask=True),
             loss_loc_ref = dict(type='CrossEntropyLoss', use_mask=True,loss_weight=0),
+            loss_track=dict(
+                     type='MultiPosCrossEntropyLoss', loss_weight=0),
+            loss_track_aux=None
         ),
-    ),
-    tracker=dict(
-        type='SelfSupervisionEmbedTracker',
-        match_metric='cosine',
     ),
 )
 
-dataset_type = 'BDDSelfSupervisionDataset'
+dataset_type = 'BDDSelfSupervisionDatasetV'
 data_root = 'data/bdd/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -89,7 +88,7 @@ data = dict(
 )
 
 # optimizer
-optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.02/2, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=None)
 # learning policy
 lr_config = dict(
@@ -109,11 +108,11 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 6
+total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-evaluation = dict(metric=['bbox', 'track'], interval=6)
+evaluation = dict(metric=['bbox', 'track'], interval=12)
 find_unused_parameters = True

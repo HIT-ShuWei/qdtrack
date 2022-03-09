@@ -55,14 +55,14 @@ def cal_weighted_similarity(key_embeds,
         
         # sum all regions
         dists = torch.sum(dists, dim=0)
-        weights = torch.sum(dist, dim=0)
+        weights = torch.sum(weights, dim=0)
         
         # cal result
-        res = torch.mul(dist, weights.pow(-1))
+        res = torch.mul(dists, weights.pow(-1))
         return res
     elif method == 'dot_product':
         if temperature > 0:
-            dists = cal_similarity(key_embeds, ref_embeds, method='cosine')
+            dists = cal_weighted_similarity(key_embeds, ref_embeds, method='cosine')
             dists /= temperature
             return dists
         else:
@@ -80,8 +80,8 @@ def cal_weighted_similarity(key_embeds,
             
             # sum all regions
             dists = torch.sum(dists, dim=0)
-            weights = torch.sum(dist, dim=0)
+            weights = torch.sum(weights, dim=0)
             
             # cal result
-            res = torch.mul(dist, weights.pow(-1))
+            res = torch.mul(dists, weights.pow(-1))
             return res

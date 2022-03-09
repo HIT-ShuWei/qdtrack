@@ -63,15 +63,15 @@ class VPMTrack(QDTrack):
 
         x = self.extract_feat(img)
         proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
-        det_bboxes, det_labels, track_feats, scores = self.roi_head.simple_test(
+        det_bboxes, det_labels, track_feats, track_scores = self.roi_head.simple_test(
             x, img_metas, proposal_list, rescale)
-        
         # TODO 完成simple_test的加权匹配环节
         if track_feats is not None:
             bboxes, labels, ids = self.tracker.match(
                 bboxes=det_bboxes,
                 labels=det_labels,
                 track_feats=track_feats,
+                track_scores = track_scores,
                 frame_id=frame_id)
 
         bbox_result = bbox2result(det_bboxes, det_labels,

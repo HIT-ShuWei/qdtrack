@@ -134,12 +134,15 @@ class SelfSupervisionEmbedTracker(object):
         return memo_bboxes, memo_labels, memo_embeds, memo_ids.squeeze(
             0), memo_vs
 
-    def match(self, bboxes, labels, track_feats, frame_id, asso_tau=-1):
+    def match(self, bboxes, labels, track_feats, track_scores, frame_id, asso_tau=-1):
 
         _, inds = bboxes[:, -1].sort(descending=True)
         bboxes = bboxes[inds, :]
         labels = labels[inds]
-        embeds = track_feats[inds, :]
+        print('bboxes:{}'.format(bboxes.size()))
+        print('track_feats:{}'.format(track_feats.size()))
+        embeds = track_feats[inds, :, :]
+        vis_scores = track_scores[inds, :, :]
 
         # duplicate removal for potential backdrops and cross classes
         valids = bboxes.new_ones((bboxes.size(0)))
@@ -152,7 +155,9 @@ class SelfSupervisionEmbedTracker(object):
         valids = valids == 1
         bboxes = bboxes[valids, :]
         labels = labels[valids]
-        embeds = embeds[valids, :]
+        embeds = embeds[valids, :, :]
+        vis_scores = vis_scores[valids, :, :]
+
 
         # init ids container
         ids = torch.full((bboxes.size(0), ), -1, dtype=torch.long)
@@ -162,20 +167,22 @@ class SelfSupervisionEmbedTracker(object):
             (memo_bboxes, memo_labels, memo_embeds, memo_ids,
              memo_vs) = self.memo
 
-            if self.match_metric == 'bisoftmax':
-                feats = torch.mm(embeds, memo_embeds.t())
-                d2t_scores = feats.softmax(dim=1)
-                t2d_scores = feats.softmax(dim=0)
-                scores = (d2t_scores + t2d_scores) / 2
-            elif self.match_metric == 'softmax':
-                feats = torch.mm(embeds, memo_embeds.t())
-                scores = feats.softmax(dim=1)
-            elif self.match_metric == 'cosine':
-                scores = torch.mm(
-                    F.normalize(embeds, p=2, dim=1),
-                    F.normalize(memo_embeds, p=2, dim=1).t())
-            else:
-                raise NotImplementedError
+            # if self.match_metric == 'bisoftmax':
+            #     feats = torch.mm(embeds, memo_embeds.t())
+            #     d2t_scores = feats.softmax(dim=1)
+            #     t2d_scores = feats.softmax(dim=0)
+            #     scores = (d2t_scores + t2d_scores) / 2
+            # elif self.match_metric == 'softmax':
+            #     feats = torch.mm(embeds, memo_embeds.t())
+            #     scores = feats.softmax(dim=1)
+            # elif self.match_metric == 'cosine':
+            #     scores = torch.mm(
+            #         F.normalize(embeds, p=2, dim=1),
+            #         F.normalize(memo_embeds, p=2, dim=1).t())
+            # else:
+            #     raise NotImplementedError
+
+            scores = self._get_dist(embeds, memo_embeds, vis_scores, metric=self.match_metric)
 
             if self.with_cats:
                 cat_same = labels.view(-1, 1) == memo_labels.view(1, -1)
@@ -204,3 +211,45 @@ class SelfSupervisionEmbedTracker(object):
         self.update_memo(ids, bboxes, embeds, labels, frame_id)
 
         return bboxes, labels, ids
+
+    def _get_dist(self, _embeds, _memo_embeds, _vis_score, metric='cosine'):
+        """
+        Func:
+        calculate the patial emb with every part for each emb in _memo_emb
+
+        Args:
+        _embeds(torch.Tensor): [batch_inds, region_inds, embeds]
+        _memo_embeds(torch.Tensor): [tracklet_nums, region_inds, embeds]
+        _vis_score(torch.Tensor):[batch_inds, region_inds, score]
+        _metric(str): in ['bisoftmax', 'cosine', 'softmax']
+        
+        Outputs:
+        _scores(torch.Tensor): [batch_size, tracklet_nums] 
+                              the distances between holistic key obj and each part emb of tracklets obj
+        """
+        
+        bs = _embeds.size(0)    # batch size
+        ts = _memo_embeds.size(0)   # tracklet size
+        num_regions = _embeds.size(1)
+
+        if metric == 'cosine':
+            _embeds = F.normalize(_embeds, p=2, dim=2)
+            _memo_embeds = F.normalize(_memo_embeds, p=2, dim=2)
+            dists = []
+            weights = []
+
+            for region_ind in range(num_regions):
+                dist = torch.mm(_embeds[:,region_ind,:], _memo_embeds[:,region_ind,:].t())
+                weight = _vis_score[:,region_ind,:]
+                weights.append(weight)
+                dists.append(torch.mul(dist, weight))
+            
+            dists = torch.cat(dists).view(num_regions, bs, ts)
+            weights = torch.cat(weights).view(num_regions, bs, 1)
+
+            dists = torch.sum(dists, dim=0)
+            weights = torch.sum(weights, dim=0)
+
+            _scores = torch.mul(dists, weights.pow(-1))
+     
+        return _scores
