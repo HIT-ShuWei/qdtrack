@@ -106,7 +106,6 @@ class SelfSupervisionEmbedHead(nn.Module):
 
     def forward(self, x):
         
-        print('net x:{}'.format(x.size()))
         # 3*3 conv layers
         if self.num_convs > 0:
             for i, conv in enumerate(self.convs):

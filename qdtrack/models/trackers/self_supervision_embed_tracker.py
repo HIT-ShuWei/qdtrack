@@ -44,22 +44,29 @@ class SelfSupervisionEmbedTracker(object):
     def empty(self):
         return False if self.tracklets else True
 
-    def update_memo(self, ids, bboxes, embeds, labels, frame_id):
+    def update_memo(self, ids, bboxes, embeds, vis_scores, labels, frame_id):
         tracklet_inds = ids > -1
 
         # update memo
-        for id, bbox, embed, label in zip(ids[tracklet_inds],
+        for id, bbox, embed, vis_score, label in zip(ids[tracklet_inds],
                                           bboxes[tracklet_inds],
                                           embeds[tracklet_inds],
+                                          vis_scores[tracklet_inds],
                                           labels[tracklet_inds]):
             id = int(id)
             if id in self.tracklets.keys():
                 velocity = (bbox - self.tracklets[id]['bbox']) / (
                     frame_id - self.tracklets[id]['last_frame'])
                 self.tracklets[id]['bbox'] = bbox
-                self.tracklets[id]['embed'] = (
-                    1 - self.memo_momentum
-                ) * self.tracklets[id]['embed'] + self.memo_momentum * embed
+                if True:
+                    momentum = vis_score / torch.sum(vis_score)
+                    self.tracklets[id]['embed'] = (
+                    1 - momentum
+                ) * self.tracklets[id]['embed'] + momentum * embed
+                else:
+                    self.tracklets[id]['embed'] = (
+                        1 - self.memo_momentum
+                    ) * self.tracklets[id]['embed'] + self.memo_momentum * embed
                 self.tracklets[id]['last_frame'] = frame_id
                 self.tracklets[id]['label'] = label
                 self.tracklets[id]['velocity'] = (
@@ -139,8 +146,6 @@ class SelfSupervisionEmbedTracker(object):
         _, inds = bboxes[:, -1].sort(descending=True)
         bboxes = bboxes[inds, :]
         labels = labels[inds]
-        print('bboxes:{}'.format(bboxes.size()))
-        print('track_feats:{}'.format(track_feats.size()))
         embeds = track_feats[inds, :, :]
         vis_scores = track_scores[inds, :, :]
 
@@ -208,7 +213,7 @@ class SelfSupervisionEmbedTracker(object):
             dtype=torch.long)
         self.num_tracklets += num_news
 
-        self.update_memo(ids, bboxes, embeds, labels, frame_id)
+        self.update_memo(ids, bboxes, embeds, vis_scores,  labels, frame_id)
 
         return bboxes, labels, ids
 

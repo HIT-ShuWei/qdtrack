@@ -156,13 +156,13 @@ class SelfSupervisionRoIHead(StandardRoIHead):
     def simple_test(self, x, img_metas, proposal_list, rescale):
         det_bboxes, det_labels = self.simple_test_bboxes(
             x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
-
+        
         # TODO: support batch inference
         det_bboxes = det_bboxes[0]
         det_labels = det_labels[0]
 
         if det_bboxes.size(0) == 0:
-            return det_bboxes, det_labels, None
+            return det_bboxes, det_labels, None, None
 
         track_bboxes = det_bboxes[:, :-1] * torch.tensor(
             img_metas[0]['scale_factor']).to(det_bboxes.device)
