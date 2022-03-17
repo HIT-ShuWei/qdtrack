@@ -8,8 +8,7 @@ from .coco_video_dataset import CocoVideoDataset
 @DATASETS.register_module()
 class BDDSelfSupervisionDatasetV(CocoVideoDataset):
 
-    CLASSES = ('car', 'bus', 'truck', 
-               'motorcycle')
+    CLASSES = ('car', 'bus', 'truck')
 
     # CLASSES = ('pedestrian', 'rider', 'car', 'truck', 'bus', 'train', 
     #            'motorcycle', 'bicycle')

@@ -10,6 +10,34 @@ from .qdtrack import QDTrack
 
 @MODELS.register_module()
 class VPMTrack(QDTrack):
+
+    def __init__(self, tracker=None, freeze_loc_layer=False, freeze_detector=False, *args, **kwargs):
+        self.prepare_cfg(kwargs)
+        super().__init__(*args, **kwargs)
+        self.tracker_cfg = tracker
+
+        self.freeze_loc_layer = freeze_loc_layer
+        self.freeze_detector = freeze_detector
+        if self.freeze_detector:
+            self._freeze_detector()
+        if self.freeze_loc_layer:
+            self._freeze_loc_layer()
+
+    def _freeze_detector(self):
+
+        self.detector = [
+            self.backbone, self.neck, self.rpn_head, self.roi_head.bbox_head
+        ]
+        for model in self.detector:
+            model.eval()
+            for param in model.parameters():
+                param.requires_grad = False
+    
+    def _freeze_loc_layer(self):
+        self.roi_head.track_head.classifer.eval()
+        for param in self.roi_head.track_head.classifer.parameters():
+            param.requires_grad = False
+
     def forward_train(self,
                       img,
                       img_metas,
