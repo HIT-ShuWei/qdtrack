@@ -10,7 +10,7 @@ import math
 
 
 @HEADS.register_module()
-class SelfSupervisionEmbedHead(nn.Module):
+class SelfSupervisionEmbedHeadV2(nn.Module):
 
     def __init__(self,
                  num_convs=4,
@@ -33,7 +33,7 @@ class SelfSupervisionEmbedHead(nn.Module):
                      margin=0.3,
                      loss_weight=1.0,
                      hard_mining=True)):
-        super(SelfSupervisionEmbedHead, self).__init__()
+        super(SelfSupervisionEmbedHeadV2, self).__init__()
         self.num_convs = num_convs
         self.num_regions = num_regions
         self.roi_feat_size = roi_feat_size
@@ -42,10 +42,13 @@ class SelfSupervisionEmbedHead(nn.Module):
         self.embed_channels = embed_channels
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
-        self.convs, last_layer_dim = self._add_conv_branch(
+        self.convs, last_layer_dim1 = self._add_conv_branch(
             self.num_convs, self.in_channels)
-        self.classifer, last_layer_dim = self._add_classifier_branch(
-            last_layer_dim, self.num_regions
+        self.classifer, last_layer_dim2 = self._add_classifier_branch(
+            last_layer_dim1, self.num_regions
+        )
+        self.fc_embed = self._add_fc_branch(
+            last_layer_dim1, embed_channels, self.num_regions,
         )
         self.softmax = nn.Softmax(dim=1)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -82,25 +85,50 @@ class SelfSupervisionEmbedHead(nn.Module):
         
         
     def _add_classifier_branch(self, in_channels, out_channels):
+            classifier = nn.ModuleList()
+            last_layer_dim = in_channels
+            num_befor_loc = 2
+            # 3*3 conv to reduce channels
+            for i in range(num_befor_loc):
+                classifier.append(
+                    ConvModule(
+                        last_layer_dim,
+                        last_layer_dim//2,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        conv_cfg=self.conv_cfg,
+                        norm_cfg=self.norm_cfg
+                    )
+                )
+                last_layer_dim = last_layer_dim // 2
+            # 1*1 conv to output loc_map
+            classifier.append(
+                ConvModule(
+                    last_layer_dim,
+                    out_channels,
+                    1,
+                    padding=0,
+                    conv_cfg=self.conv_cfg,
+                    norm_cfg=None,
+                    act_cfg=None))
+            last_layer_dim = out_channels
+            return classifier, last_layer_dim
 
-        classifier = nn.ModuleList()
-        classifier.append(
-            ConvModule(
-                in_channels,
-                out_channels,
-                1,
-                padding=0,
-                conv_cfg=self.conv_cfg,
-                norm_cfg=None,
-                act_cfg=None))
-        last_layer_dim = out_channels
-        return classifier, last_layer_dim
+    def _add_fc_branch(self, in_dims, out_dims, num_regions):
+        fcs = nn.ModuleList()
+        for i in range(num_regions):
+            fcs.append(
+                nn.Linear(in_dims, out_dims)
+            )
+        return fcs
 
-
-        
 
     def init_weights(self):
-        pass
+        for m in self.fc_embed:
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         
@@ -108,22 +136,33 @@ class SelfSupervisionEmbedHead(nn.Module):
         if self.num_convs > 0:
             for i, conv in enumerate(self.convs):
                 x = conv(x)
+        
+        # Tensor T
+        embedding = x
 
         # 1*1 conv layer + softmax
-        location_maps = self.classifer[0](x)
-        location_maps = self.softmax(location_maps)
+        for i, loc_conv in enumerate(self.classifer):
+            x = loc_conv(x)
+        location_maps = self.softmax(x)
+
+        # norm the weighted
+        ps = location_maps.sum(3).sum(2)
+        location_weights = location_maps / ps.unsqueeze(2).unsqueeze(3).expand_as(location_maps)
 
         # get embedding and visible-scores
         embeds = []
         scores = []
         for i in range(self.num_regions):
-            location_map = location_maps[:,i,:,:].unsqueeze(1)
-            emb = torch.mul(location_map, x)
-            emb = self.avgpool(emb)
+            location_weight = location_weights[:,i,:,:].unsqueeze(1)
+            # TODO norm here ????
+            emb = torch.mul(location_weight, embedding)
+            emb = emb.sum(3).sum(2)
+            emb = self.fc_embed[i](emb)
+            emb = emb.unsqueeze(1)
 
-            embeds.append(emb.squeeze(2).squeeze(2).unsqueeze(1))
-            
-            score = torch.sum(location_map, (2,3))
+            embeds.append(emb)
+
+            score = torch.sum(location_weight, (2,3))
             scores.append(score.unsqueeze(1))
 
         embeds = torch.cat(embeds, dim=1)

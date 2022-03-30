@@ -1,6 +1,24 @@
 import numpy as np
 import torch
 
+def loc2result(loc_maps, labels, ids, num_classes):
+    valid_inds = ids > -1
+    labels = labels[valid_inds]
+    ids = ids[valid_inds]
+    loc_maps = loc_maps[valid_inds]
+
+    if loc_maps.shape[0] == 0:
+        return [np.zeros((0, 3, 27, 27), dtype=np.float32) for i in range(num_classes)]
+    else:
+        if isinstance(loc_maps, torch.Tensor):
+            loc_maps = loc_maps.cpu().numpy()
+            labels = labels.cpu().numpy()
+            ids = ids.cpu().numpy()
+        return [
+            loc_maps[labels == i, :, :, :]  for i in range(num_classes)
+        ]
+
+
 
 def track2result(bboxes, labels, ids, num_classes):
     valid_inds = ids > -1
@@ -33,3 +51,7 @@ def restore_result(result, return_ids=False):
         return bboxes, labels, ids
     else:
         return bboxes, labels
+
+def restore_loc_result(result):
+    loc_maps = np.concatenate(result, axis=0).astype(np.float32)
+    return loc_maps

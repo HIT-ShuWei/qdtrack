@@ -1,5 +1,6 @@
 model = dict(
     type='VPMTrack',
+    freeze_detector = True,
     backbone=dict(
         type='ResNet',
         depth=50,
@@ -65,10 +66,11 @@ model = dict(
             embed_channels=256,
             norm_cfg=dict(type='GN', num_groups=32),
             loss_track=dict(type='MultiPosCrossEntropyLoss', loss_weight=0),
-            loss_track_aux=None,
+            loss_track_aux = None,
             roi_feat_size=27,
             num_regions=3,
-            loss_loc=dict(type='CrossEntropyLoss', use_mask=True),
+            loss_loc=dict(
+                type='CrossEntropyLoss', use_mask=True, loss_weight=1.0),
             loss_loc_ref=dict(
                 type='CrossEntropyLoss', use_mask=True, loss_weight=0))),
     train_cfg=dict(
@@ -113,11 +115,17 @@ model = dict(
         embed=dict(
             assigner=dict(
                 type='MaxIoUAssigner',
-                pos_iou_thr=0.7,
+                pos_iou_thr=0.3,
                 neg_iou_thr=0.3,
-                min_pos_iou=0.5,
+                min_pos_iou=0.3,
                 match_low_quality=False,
                 ignore_iof_thr=-1),
+            # sampler=dict(
+            #     type='RandomSampler',
+            #     num=256,
+            #     pos_fraction=0.5,
+            #     neg_pos_ub=-1,
+            #     add_gt_as_proposals=False))),
             sampler=dict(
                 type='CombinedSampler',
                 num=256,
@@ -163,7 +171,8 @@ train_pipeline = [
         type='SeqLoadAnnotations',
         with_bbox=True,
         with_ins_id=True,
-        with_loc_map=False),
+        with_loc_map=False,
+        ),
     dict(type='SeqResize', img_scale=(1296, 720), keep_ratio=True),
     dict(type='SeqRandomFlip', share_params=True, flip_ratio=0.5),
     dict(
@@ -306,7 +315,7 @@ data = dict(
                     dict(type='VideoCollect', keys=['img'])
                 ])
         ]))
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=None)
 lr_config = dict(
     policy='step',
@@ -316,13 +325,13 @@ lr_config = dict(
     step=[8, 11])
 checkpoint_config = dict(interval=1)
 log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
-total_epochs = 12
+total_epochs = 1
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = None
+load_from = "./work_dirs/self_supervision_bdd100k_only_vehicle_freeze_loc/epoch_12.pth"
 resume_from = None
 workflow = [('train', 1)]
 evaluation = dict(metric=['bbox', 'track'], interval=12)
 find_unused_parameters = False
-work_dir = './work_dirs/self_supervision_bdd100k_only_vehicle'
+work_dir = './work_dirs/test3_with_occluded'
 gpu_ids = range(0, 1)

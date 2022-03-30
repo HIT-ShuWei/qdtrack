@@ -141,13 +141,15 @@ class SelfSupervisionEmbedTracker(object):
         return memo_bboxes, memo_labels, memo_embeds, memo_ids.squeeze(
             0), memo_vs
 
-    def match(self, bboxes, labels, track_feats, track_scores, frame_id, asso_tau=-1):
+    def match(self, bboxes, labels, track_feats, track_scores, frame_id, asso_tau=-1, loc_maps=None):
 
         _, inds = bboxes[:, -1].sort(descending=True)
         bboxes = bboxes[inds, :]
         labels = labels[inds]
         embeds = track_feats[inds, :, :]
         vis_scores = track_scores[inds, :, :]
+        if loc_maps  != None:
+            loc_maps = loc_maps[inds, :, :, :]
 
         # duplicate removal for potential backdrops and cross classes
         valids = bboxes.new_ones((bboxes.size(0)))
@@ -162,6 +164,8 @@ class SelfSupervisionEmbedTracker(object):
         labels = labels[valids]
         embeds = embeds[valids, :, :]
         vis_scores = vis_scores[valids, :, :]
+        if loc_maps != None:
+            loc_maps = loc_maps[valids, :, :, :]
 
 
         # init ids container
@@ -214,7 +218,9 @@ class SelfSupervisionEmbedTracker(object):
         self.num_tracklets += num_news
 
         self.update_memo(ids, bboxes, embeds, vis_scores,  labels, frame_id)
-
+        
+        if loc_maps != None:
+            return bboxes, labels, ids, loc_maps
         return bboxes, labels, ids
 
     def _get_dist(self, _embeds, _memo_embeds, _vis_score, metric='cosine'):

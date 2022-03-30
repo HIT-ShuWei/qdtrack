@@ -50,7 +50,8 @@ class BDDSelfSupervisionDatasetV(CocoVideoDataset):
                 continue
             if ann['category_id'] not in self.cat_ids:
                 continue
-            if self.only_holistic and (ann['truncated'] or ann['occluded']):
+            # if self.only_holistic and (ann['truncated'] or ann['occluded']):
+            if self.only_holistic and ann['truncated']:
                 continue
             bbox = [x1, y1, x1 + w, y1 + h]
             # if self.only_holistic:

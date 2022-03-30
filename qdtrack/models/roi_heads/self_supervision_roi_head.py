@@ -162,10 +162,10 @@ class SelfSupervisionRoIHead(StandardRoIHead):
         det_labels = det_labels[0]
 
         if det_bboxes.size(0) == 0:
-            return det_bboxes, det_labels, None, None
+            return det_bboxes, det_labels, None, None, None
 
         track_bboxes = det_bboxes[:, :-1] * torch.tensor(
             img_metas[0]['scale_factor']).to(det_bboxes.device)
-        _, track_feats, scores = self._track_forward(x, [track_bboxes])
+        loc_maps, track_feats, scores = self._track_forward(x, [track_bboxes])
 
-        return det_bboxes, det_labels, track_feats, scores
+        return det_bboxes, det_labels, track_feats, scores, loc_maps

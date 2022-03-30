@@ -2,11 +2,14 @@ import numpy as np
 from mmdet.core import bbox2result
 from mmdet.models import TwoStageDetector
 
-from qdtrack.core import track2result
+from qdtrack.core import track2result, loc2result
+from qdtrack.core.track.transforms import restore_loc_result
 from ..builder import MODELS, build_tracker
-from qdtrack.core import imshow_tracks, restore_result
+from qdtrack.core import imshow_tracks, restore_result, restore_loc_result
 
 from .qdtrack import QDTrack
+
+import torch
 
 @MODELS.register_module()
 class VPMTrack(QDTrack):
@@ -92,26 +95,91 @@ class VPMTrack(QDTrack):
         x = self.extract_feat(img)
         proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
 
-        det_bboxes, det_labels, track_feats, track_scores = self.roi_head.simple_test(
+        det_bboxes, det_labels, track_feats, track_scores, track_loc_maps = self.roi_head.simple_test(
             x, img_metas, proposal_list, rescale)
 
         if track_feats is not None:
-            bboxes, labels, ids = self.tracker.match(
+            bboxes, labels, ids, loc_maps  = self.tracker.match(
                 bboxes=det_bboxes,
                 labels=det_labels,
                 track_feats=track_feats,
                 track_scores = track_scores,
-                frame_id=frame_id)
+                frame_id=frame_id,
+                loc_maps = track_loc_maps)
 
         bbox_result = bbox2result(det_bboxes, det_labels,
                                   self.roi_head.bbox_head.num_classes)
 
         if track_feats is not None:
+            
             track_result = track2result(bboxes, labels, ids,
                                         self.roi_head.bbox_head.num_classes)
+            loc_map_result = loc2result(loc_maps, labels, ids, \
+                                        self.roi_head.bbox_head.num_classes)
+            # print('track_result:{}'.format(track_result[0].shape))
+            # torch.set_printoptions(profile="full")
+            # print('loc_map_result:{}'.format(loc_map_result[0].shape))
         else:
             track_result = [
                 np.zeros((0, 6), dtype=np.float32)
                 for i in range(self.roi_head.bbox_head.num_classes)
             ]
-        return dict(bbox_results=bbox_result, track_results=track_result)
+            loc_map_result = [
+                np.zeros((0,3,27,27), dtype=np.float32)
+                for i in range(self.roi_head.bbox_head.num_classes)
+            ]
+        return dict(bbox_results=bbox_result, track_results=track_result, loc_map_results = loc_map_result)
+
+
+    def show_result(self,
+                img,
+                result,
+                thickness=1,
+                font_scale=0.5,
+                show=False,
+                out_file=None,
+                wait_time=0,
+                backend='cv2',
+                **kwargs):
+        """Visualize tracking results.
+
+        Args:
+            img (str | ndarray): Filename of loaded image.
+            result (dict): Tracking result.
+                The value of key 'track_results' is ndarray with shape (n, 6)
+                in [id, tl_x, tl_y, br_x, br_y, score] format.
+                The value of key 'bbox_results' is ndarray with shape (n, 5)
+                in [tl_x, tl_y, br_x, br_y, score] format.
+            thickness (int, optional): Thickness of lines. Defaults to 1.
+            font_scale (float, optional): Font scales of texts. Defaults
+                to 0.5.
+            show (bool, optional): Whether show the visualizations on the
+                fly. Defaults to False.
+            out_file (str | None, optional): Output filename. Defaults to None.
+            backend (str, optional): Backend to draw the bounding boxes,
+                options are `cv2` and `plt`. Defaults to 'cv2'.
+
+        Returns:
+            ndarray: Visualized image.
+        """
+        assert isinstance(result, dict)
+        track_result = result.get('track_results', None)
+        bboxes, labels, ids = restore_result(track_result, return_ids=True)
+
+        loc_map_result = result.get('loc_map_results', None)
+        loc_maps = restore_loc_result(loc_map_result)
+
+        img = imshow_tracks(
+            img,
+            bboxes,
+            labels,
+            ids,
+            classes=self.CLASSES,
+            thickness=thickness,
+            font_scale=font_scale,
+            show=show,
+            out_file=out_file,
+            wait_time=wait_time,
+            backend=backend,
+            loc_maps = loc_maps)
+        return img

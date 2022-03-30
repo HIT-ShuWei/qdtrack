@@ -38,7 +38,8 @@ def _cv2_show_tracks(img,
                      font_scale=0.4,
                      show=False,
                      wait_time=0,
-                     out_file=None):
+                     out_file=None,
+                     loc_maps=None):
     """Show the tracks with opencv."""
     assert bboxes.ndim == 2
     assert labels.ndim == 1
@@ -48,12 +49,13 @@ def _cv2_show_tracks(img,
     if isinstance(img, str):
         img = mmcv.imread(img)
 
+
     img_shape = img.shape
     bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1])
     bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
 
     text_width, text_height = 10, 15
-    for bbox, label, id in zip(bboxes, labels, ids):
+    for bbox, label, id, loc_map in zip(bboxes, labels, ids, loc_maps):
         x1, y1, x2, y2 = bbox[:4].astype(np.int32)
         score = float(bbox[-1])
 
@@ -61,6 +63,36 @@ def _cv2_show_tracks(img,
         bbox_color = random_color(id)
         bbox_color = [int(255 * _c) for _c in bbox_color][::-1]
         cv2.rectangle(img, (x1, y1), (x2, y2), bbox_color, thickness=thickness)
+
+        # loc_map
+        h, w = y2-y1, x2-x1
+        loc_map = loc_map.transpose(1,2,0)
+        img_colors = []
+        for i in range(3):
+            loc_map1 = loc_map[:,:,i]
+            loc_map1_resize = cv2.resize(loc_map1, (w,h))
+            loc_map1_expand = np.expand_dims(loc_map1_resize, axis=2)
+
+            img_color = np.zeros([h, w, 3], np.uint8)
+            img_color[:,:,i] = np.zeros([h,w])+255
+            img_color = img_color * loc_map1_expand
+
+            img_colors.append(img_color)
+
+
+        loc_map1 = loc_map[:,:,2]
+        loc_map1_resize = cv2.resize(loc_map1, (w,h))
+        loc_map1_expand = np.expand_dims(loc_map1_resize, axis=2)
+
+        img_green = np.zeros([h, w, 3], np.uint8)
+        img_green[:,:,1] = np.zeros([h,w])+255
+
+        img_green = img_green * loc_map1_expand
+        img_bbox = img[y1:y2, x1:x2, :]
+        img_map = img_colors[0] * 1 + img_colors[1] * 1 + img_colors[2] * 1
+        img_bbox = cv2.addWeighted(img_bbox, 0.5, img_map.astype('uint8'), 0.5, 0)
+        img[y1:y2, x1:x2, :] = img_bbox
+
 
         # id
         text = str(id)
